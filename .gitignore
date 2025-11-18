@@ -1,0 +1,85 @@
+# -----------------------
+# Python / FastAPI
+# -----------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+.env
+.env.*
+*.env
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# PyInstaller
+*.spec
+
+# Jupyter
+.ipynb_checkpoints/
+
+# -----------------------
+# Node / React / Vite
+# -----------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite build output
+dist/
+.vite/
+vite.config.ts.timestamp*
+
+# Optional:
+# If using TypeScript
+*.tsbuildinfo
+
+# -----------------------
+# Logs
+# -----------------------
+*.log
+logs/
+log.txt
+
+# -----------------------
+# OS Files
+# -----------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# -----------------------
+# IDE Files
+# -----------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# -----------------------
+# Redis (if using dump)
+# -----------------------
+dump.rdb
+*.rdb
+
+# -----------------------
+# Misc
+# -----------------------
+*.tmp
+*.temp
+*.cache/
+.cache/
+coverage/
