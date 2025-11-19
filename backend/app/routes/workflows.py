@@ -12,7 +12,6 @@ class WorkflowCreateRequest(BaseModel):
     workflow_id: str
     name: str
     owner_user_id: str
-    entry_branch: Optional[str] = None
     
 class WorkflowResponse(BaseModel):
     workflow_id: str
@@ -20,8 +19,10 @@ class WorkflowResponse(BaseModel):
     owner_user_id: str
     entry_branch: Optional[str] = None
     
-@router.post("/", response_model=WorkflowResponse, summary="Create a new workflow (dummy branch node 0)")
+@router.post("/", response_model=WorkflowResponse,
+             summary="Create a new workflow (dummy branch node 0)")
 async def create_workflow(payload: WorkflowCreateRequest):
+
     if not await UserManager.is_registered(payload.owner_user_id):
         raise HTTPException(status_code=400, detail="Owner user is not registered.")
 
@@ -29,18 +30,21 @@ async def create_workflow(payload: WorkflowCreateRequest):
         workflow_id=payload.workflow_id,
         name=payload.name,
         owner_user_id=payload.owner_user_id,
-        entry_branch=payload.entry_branch,
     )
 
     if not created:
         raise HTTPException(status_code=400, detail="Workflow ID already exists.")
 
+    wf = await WorkflowManager.get_workflow(payload.workflow_id)
+
     return WorkflowResponse(
-        workflow_id=payload.workflow_id,
-        name=payload.name,
-        owner_user_id=payload.owner_user_id,
-        entry_branch=payload.entry_branch,
+        workflow_id=wf["workflow_id"],
+        name=wf.get("name", ""),
+        owner_user_id=wf.get("owner_user_id", ""),
+        entry_branch=wf.get("entry_branch"),
     )
+
+
 
 # get all workflows
 @router.get("/", response_model=List[WorkflowResponse], summary="List all workflows")
@@ -65,7 +69,7 @@ async def get_workflow(workflow_id: str):
 
     return WorkflowResponse(
         workflow_id=wf["workflow_id"],
-        name=wf.get("name", ""),
+        name=wf.get("name"),
         owner_user_id=wf.get("owner_user_id", ""),
         entry_branch=wf.get("entry_branch"),
     )

@@ -88,3 +88,31 @@ def workflow_branch_key(workflow_id: str, branch_id: str) -> str:
         RPUSH workflow:<wf_id>:branch:<branch_id> <job_template_id>
     '''
     return f"workflow:{workflow_id}:branch:{branch_id}"
+
+'''
+============
+Jobs
+============
+'''
+def job_key(job_id: str) -> str:
+    return f"job:{job_id}:data"
+
+def workflow_runs_key(workflow_id: str) -> str:
+    return f"workflow:{workflow_id}:runs"
+
+def workflow_run_jobs_key(workflow_id: str, run_id: str) -> str:
+    return f"workflow:{workflow_id}:run:{run_id}:jobs"
+
+GLOBAL_PENDING_JOBS = "scheduler:pending_jobs"
+ACTIVE_USERS_KEY = "scheduler:active_users"
+
+def user_queue_key(user_id: str) -> str:
+    return f"user:{user_id}:queue"
+
+'''
+============
+Scheduler
+============
+'''
+def scheduler_state_key() -> str:
+    return "scheduler:state"
