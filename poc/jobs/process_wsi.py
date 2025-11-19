@@ -276,7 +276,7 @@ def process_wsi_optimized(input_path: Path, output_dir: Path, BATCH_SIZE, TILE_S
 
     running_label = 1
 
-    # batch tile processing
+    # batch tile
     print("Running batch inference…")
     for i in range(0, len(tiles), BATCH_SIZE):
         print(f"Processing {i} out of {len(tiles)}")
@@ -297,6 +297,9 @@ def process_wsi_optimized(input_path: Path, output_dir: Path, BATCH_SIZE, TILE_S
 
             final_mask[y:y_end, x:x_end] = labeled_output[:tile_h, :tile_w]
 
+    # ---------------------------
+    # 4. OUTPUT SAVING
+    # ---------------------------
     output_dir.mkdir(exist_ok=True, parents=True)
     mask_path = output_dir / "mask.png"
     overlay_path = output_dir / "overlay.png"
@@ -325,6 +328,7 @@ if __name__ == "__main__":
     METHOD                   INPUT                       FILE SIZE   EXECUTION TIME
     process_wsi_naive        CMU-1-Small-Region.svs      1.9 MB      7.02 seconds
     process_wsi_optimized    CMU-1-Small-Region.svs      1.9 MB      5.85 seconds
+    
     
     process_wsi_naive        JP2k-33003-1.svs            60.89 MB    200.79 seconds
     process_wsi_optimized    JP2k-33003-1.svs            60.89 MB    114.87 seconds

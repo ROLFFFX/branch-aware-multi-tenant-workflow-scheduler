@@ -9,7 +9,7 @@ import { api } from "../api/client.js";
 const JOB_TEMPLATES = [
   { id: "fake_sleep", label: "Fake Sleep (5s)" },
   { id: "wsi_metadata", label: "Initialize WSI" },
-  { id: "segment_tiles", label: "Tile Segmentation" },
+  { id: "tile_segmentation", label: "Tile Segmentation" },
 ];
 
 export function WorkflowDetailPage() {
@@ -122,7 +122,7 @@ export function WorkflowDetailPage() {
 
     const needsSlide =
       jobForm.job_template_id === "wsi_metadata" ||
-      jobForm.job_template_id === "segment_tiles";
+      jobForm.job_template_id === "tile_segmentation";
 
     const payload =
       needsSlide && jobForm.slide_id ? { slide_id: jobForm.slide_id } : {};

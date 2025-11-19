@@ -86,3 +86,6 @@ poc/data
 test/
 
 backend/storage
+
+results/
+tmp/

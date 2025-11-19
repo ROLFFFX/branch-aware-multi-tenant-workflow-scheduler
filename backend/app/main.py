@@ -10,7 +10,7 @@ from app.workers.worker_main import worker_loop
 
 import app.jobs.fake_sleep
 import app.jobs.wsi_initialize
-
+import app.jobs.tile_segmentation
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
