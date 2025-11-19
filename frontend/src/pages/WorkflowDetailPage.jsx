@@ -1,272 +1,297 @@
+// ======================================================
+// WorkflowDetailPage.jsx  — Restored Polished Layout
+// ======================================================
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 
-// OPTIONAL: auto-suggest payloads depending on template
-const TEMPLATE_PAYLOAD_SUGGESTIONS = {
-  fake_sleep: '{\n  "seconds": 5\n}',
-  generate_tissue_mask: '{\n  "wsi_path": "path/to/wsi.svs"\n}',
-  segment_cells: '{\n  "mask_path": "path/to/mask.tif"\n}',
-  export_polygons: '{\n  "cells_path": "path/to/cells.json"\n}',
-};
+// Hard-coded templates (simplified — no JSON)
+const JOB_TEMPLATES = [
+  { id: "fake_sleep", label: "Fake Sleep (5s)" },
+  { id: "init_wsi", label: "Initialize WSI" },
+  { id: "segment_tiles", label: "Tile Segmentation" },
+];
 
 export function WorkflowDetailPage() {
   const { workflowId } = useParams();
 
   const [workflow, setWorkflow] = useState(null);
   const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState(null);
   const [branchJobs, setBranchJobs] = useState([]);
 
-  const [jobTemplates, setJobTemplates] = useState([]);
+  const [slides, setSlides] = useState([]);
 
   const [newBranchId, setNewBranchId] = useState("");
-
   const [jobForm, setJobForm] = useState({
     job_template_id: "",
-    payloadJson: "{}",
+    slide_id: "",
   });
 
-  const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
 
-  // ----------- Load job templates from backend ----------- //
+  // ---------------------- LOAD WORKFLOW ----------------------
   useEffect(() => {
-    async function loadTemplates() {
-      try {
-        const arr = await api.listJobTemplates(); // GET /jobs/job-templates
-        // arr = ["fake_sleep", "generate_tissue_mask", ...]
-        const formatted = arr.map((id) => ({
-          id,
-          label: id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        }));
-
-        setJobTemplates(formatted);
-
-        // set default template + default payload
-        setJobForm((f) => ({
-          ...f,
-          job_template_id: formatted[0]?.id || "",
-          payloadJson: TEMPLATE_PAYLOAD_SUGGESTIONS[formatted[0]?.id] || "{}",
-        }));
-      } catch (e) {
-        console.error("Failed to load job templates:", e);
-      }
-    }
-    loadTemplates();
-  }, []);
-
-  // ----------- Load workflow + branches ----------- //
-  async function loadWorkflow() {
-    try {
-      setLoading(true);
-      setErr(null);
-
-      const wf = await api.getWorkflow(workflowId);
-      setWorkflow(wf);
-
-      const brs = await api.getBranches(workflowId);
-      setBranches(Array.isArray(brs) ? brs : []);
-
-      // auto-select first branch
-      if (brs?.length && !selectedBranchId) {
-        setSelectedBranchId(brs[0]);
-      }
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadBranchJobs(branchId) {
-    if (!branchId) return;
-    try {
-      const res = await api.getBranchJobs(workflowId, branchId);
-      setBranchJobs(res.jobs || []);
-    } catch (e) {
-      setErr(e.message);
-    }
-  }
-
-  useEffect(() => {
-    loadWorkflow();
+    if (!workflowId) return;
+    loadWorkflow(workflowId);
   }, [workflowId]);
 
   useEffect(() => {
-    if (selectedBranchId) {
-      loadBranchJobs(selectedBranchId);
-    } else {
-      setBranchJobs([]);
-    }
-  }, [selectedBranchId]);
+    if (!selectedBranch) return;
+    loadBranchJobs(workflowId, selectedBranch);
+  }, [selectedBranch, workflowId]);
 
-  // ----------- Create branch ----------- //
+  async function loadWorkflow(id) {
+    try {
+      const wf = await api.getWorkflow(id);
+      setWorkflow(wf);
+
+      const brs = await api.getBranches(id);
+      setBranches(brs);
+
+      // auto-select entry branch
+      if (wf.entry_branch && brs.includes(wf.entry_branch)) {
+        setSelectedBranch(wf.entry_branch);
+        loadBranchJobs(id, wf.entry_branch);
+      } else if (brs.length > 0) {
+        setSelectedBranch(brs[0]);
+        loadBranchJobs(id, brs[0]);
+      }
+
+      if (wf.owner_user_id) loadSlides(wf.owner_user_id);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  // ---------------------- LOAD BRANCH JOBS ----------------------
+  async function loadBranchJobs(wfId, branchId) {
+    try {
+      const data = await api.getBranchJobs(wfId, branchId);
+      setBranchJobs(data.jobs || []);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  // ---------------------- LOAD SLIDES ----------------------
+  async function loadSlides(userId) {
+    try {
+      const arr = await api.listSlides(userId);
+      setSlides(arr || []);
+    } catch {
+      setSlides([]);
+    }
+  }
+
+  // ---------------------- CREATE BRANCH ----------------------
   async function handleCreateBranch(e) {
     e.preventDefault();
     if (!newBranchId.trim()) return;
+
     try {
       await api.createBranch(workflowId, newBranchId.trim());
       setNewBranchId("");
       setInfo("Branch created.");
-      loadWorkflow();
+      loadWorkflow(workflowId);
     } catch (e) {
       setErr(e.message);
     }
   }
 
-  // ----------- Append job ----------- //
-  async function handleAddJob(e) {
-    e.preventDefault();
-    if (!selectedBranchId) {
-      setErr("Select a branch first.");
-      return;
-    }
-    let payload;
-    try {
-      payload = JSON.parse(jobForm.payloadJson || "{}");
-    } catch {
-      setErr("Payload JSON is invalid.");
-      return;
-    }
-    try {
-      await api.addBranchJob(
-        workflowId,
-        selectedBranchId,
-        jobForm.job_template_id,
-        payload
-      );
-      setInfo("Job appended to branch.");
-      loadBranchJobs(selectedBranchId);
-    } catch (e) {
-      setErr(e.message);
-    }
-  }
-
-  // ----------- Delete branch ----------- //
+  // ---------------------- DELETE BRANCH ----------------------
   async function handleDeleteBranch(branchId) {
     if (!confirm(`Delete branch "${branchId}"?`)) return;
+
     try {
       await api.deleteBranch(workflowId, branchId);
       setInfo("Branch deleted.");
-      if (selectedBranchId === branchId) {
-        setSelectedBranchId(null);
-        setBranchJobs([]);
-      }
-      loadWorkflow();
+      loadWorkflow(workflowId);
+      setBranchJobs([]);
+      setSelectedBranch(null);
     } catch (e) {
       setErr(e.message);
     }
   }
 
-  // ----------- Job branch ----------- //
-  async function handleDeleteJob(index) {
-    if (!selectedBranchId) return;
+  // ---------------------- ADD JOB ----------------------
+  async function handleAddJob(e) {
+    e.preventDefault();
+    if (!selectedBranch) return;
 
+    const needsSlide =
+      jobForm.job_template_id === "init_wsi" ||
+      jobForm.job_template_id === "segment_tiles";
+
+    const payload =
+      needsSlide && jobForm.slide_id ? { slide_id: jobForm.slide_id } : {};
+
+    try {
+      await api.addBranchJob(
+        workflowId,
+        selectedBranch,
+        jobForm.job_template_id,
+        payload
+      );
+      setInfo("Job added.");
+
+      // Reset form
+      setJobForm({ job_template_id: "", slide_id: "" });
+      loadBranchJobs(workflowId, selectedBranch);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  // ---------------------- DELETE JOB ----------------------
+  async function handleDeleteJob(index) {
     if (!confirm(`Delete job #${index + 1}?`)) return;
 
     try {
-      setErr(null);
-      await api.deleteBranchJob(workflowId, selectedBranchId, index);
-      await loadBranchJobs(selectedBranchId);
+      await api.deleteBranchJob(workflowId, selectedBranch, index);
+      setInfo("Job deleted.");
+      loadBranchJobs(workflowId, selectedBranch);
     } catch (e) {
       setErr(e.message);
     }
   }
 
-  // ----------- Execute workflow ----------- //
-  async function handleExecuteWorkflow() {
+  // ---------------------- UPLOAD WSI ----------------------
+  async function handleUploadWSI(e) {
+    const file = e.target.files?.[0];
+    if (!file || !workflow?.owner_user_id) return;
+
     try {
-      await api.executeWorkflow(workflowId);
-      setInfo("Workflow execution started.");
+      setInfo("Uploading...");
+      await api.uploadWSI(file, workflow.owner_user_id);
+      setInfo("Slide uploaded.");
+      loadSlides(workflow.owner_user_id);
     } catch (e) {
       setErr(e.message);
     }
   }
 
+  if (!workflow)
+    return <div className="p-8 text-gray-700">Loading workflow...</div>;
+
+  // ================================================================
+  // RENDER
+  // ================================================================
   return (
     <div className="space-y-6">
+      {/* ------------------------------------------------------ */}
+      {/* HEADER */}
+      {/* ------------------------------------------------------ */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
             Workflow:{" "}
             <span className="font-mono text-sm text-sky-300">{workflowId}</span>
           </h2>
-          {workflow && (
-            <p className="text-xs text-gray-500">
-              Name:{" "}
-              <span className="font-medium text-gray-700">{workflow.name}</span>{" "}
-              · Owner:{" "}
-              <span className="font-mono">{workflow.owner_user_id}</span> ·
-              Entry branch:{" "}
-              <span className="font-mono">{workflow.entry_branch ?? "—"}</span>
-            </p>
-          )}
+
+          <p className="text-xs text-gray-500">
+            Name:{" "}
+            <span className="font-medium text-gray-700">{workflow.name}</span> ·
+            Owner: <span className="font-mono">{workflow.owner_user_id}</span> ·
+            Entry branch:{" "}
+            <span className="font-mono">{workflow.entry_branch ?? "—"}</span>
+          </p>
         </div>
+
         <button
-          onClick={handleExecuteWorkflow}
+          onClick={async () => {
+            try {
+              setInfo("Executing workflow...");
+              const res = await api.executeWorkflow(workflowId);
+
+              // optional: refresh branch jobs (reflect new PENDING jobs)
+              await loadBranchJobs(workflowId, selectedBranch);
+
+              // display toast
+              setInfo(
+                "Workflow executed. Jobs moved to Pending. Run them in Scheduler page →"
+              );
+
+              // auto-clear after 5 seconds
+              setTimeout(() => setInfo(null), 5000);
+            } catch (e) {
+              setErr("Failed to execute workflow: " + e.message);
+              setTimeout(() => setErr(null), 5000);
+            }
+          }}
           className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-sm font-medium text-white"
         >
           Execute workflow
         </button>
       </div>
 
+      {/* Global messages */}
       {err && (
         <div className="text-xs text-red-400 bg-red-900/30 border border-red-700 rounded-md px-3 py-2">
           {err}
         </div>
       )}
       {info && (
-        <div className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-700 rounded-md px-3 py-2">
+        <div
+          className="
+    text-xs
+    text-gray-700
+    bg-green-100
+    backdrop-blur-sm
+    border border-gray-200
+    rounded-md
+    px-3 py-2
+    shadow
+  "
+        >
           {info}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Branch List */}
+        {/* ------------------------------------------------------ */}
+        {/* BRANCH LIST */}
+        {/* ------------------------------------------------------ */}
         <div className="bg-white/60 border bg-gray-200 rounded-lg p-4 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-900">Branches</h3>
-          </div>
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Branches</h3>
 
           <div className="space-y-2 flex-1 overflow-auto">
-            {loading ? (
-              <p className="text-xs text-gray-500">Loading...</p>
-            ) : branches.length === 0 ? (
-              <p className="text-xs text-gray-9000">
-                No branches yet. Create one below.
-              </p>
+            {branches.length === 0 ? (
+              <p className="text-xs text-gray-9000">No branches yet.</p>
             ) : (
               branches.map((b) => {
-                const active = selectedBranchId === b;
+                const active = selectedBranch === b;
                 return (
                   <div
                     key={b}
-                    className={`flex items-center justify-between px-3 py-2 rounded-md text-xs cursor-pointer border
-                      ${
-                        active
-                          ? "bg-white border-sky-600 text-sky-200"
-                          : "bg-white bg-gray-200 text-gray-700 hover:border-slate-600"
-                      }`}
-                    onClick={() => setSelectedBranchId(b)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-md text-xs cursor-pointer border ${
+                      active
+                        ? "bg-white border-sky-600 text-sky-200"
+                        : "bg-white bg-gray-200 text-gray-700 hover:border-slate-600"
+                    }`}
+                    onClick={() => setSelectedBranch(b)}
                   >
                     <span className="font-mono">{b}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteBranch(b);
-                      }}
-                      className="text-[10px] px-2 py-1 rounded bg-red-700/80 hover:bg-red-600 text-red-50"
-                    >
-                      Delete
-                    </button>
+
+                    {b !== workflow.entry_branch && (
+                      <button
+                        className="text-[10px] px-2 py-1 rounded bg-red-700/80 hover:bg-red-600 text-red-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteBranch(b);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 );
               })
             )}
           </div>
 
+          {/* create branch */}
           <form
             onSubmit={handleCreateBranch}
             className="mt-3 pt-3 border-t bg-gray-200 space-y-2"
@@ -275,7 +300,7 @@ export function WorkflowDetailPage() {
               New branch ID
             </label>
             <input
-              className="w-full px-3 py-2 rounded-md bg-white border bg-gray-300 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="w-full px-3 py-2 rounded-md bg-white border bg-gray-300 text-xs text-gray-900"
               placeholder="branch_A"
               value={newBranchId}
               onChange={(e) => setNewBranchId(e.target.value)}
@@ -289,50 +314,79 @@ export function WorkflowDetailPage() {
           </form>
         </div>
 
-        {/* Jobs In Branch */}
-        <div className="bg-white/60 border bg-gray-200 rounded-lg p-4 lg:col-span-2 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-900">
-              Jobs in branch{" "}
-              <span className="font-mono text-xs text-sky-300">
-                {selectedBranchId ?? "—"}
-              </span>
-            </h3>
+        {/* ------------------------------------------------------ */}
+        {/* SLIDES */}
+        {/* ------------------------------------------------------ */}
+        <div className="bg-white/60 border bg-gray-200 rounded-lg p-4 flex flex-col">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">
+            Uploaded Slides
+          </h3>
+
+          <div className="space-y-2 mb-4 max-h-40 overflow-auto">
+            {slides.length === 0 ? (
+              <p className="text-xs text-gray-500">No slides uploaded.</p>
+            ) : (
+              slides.map((sl) => (
+                <div
+                  key={sl.slide_id}
+                  className="text-xs border rounded-md p-2 bg-white"
+                >
+                  <div className="font-mono text-sky-700">{sl.slide_id}</div>
+                  <div className="text-gray-700 text-[11px] break-all">
+                    {sl.slide_path}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
-          <div className="space-y-2 flex-1 overflow-auto">
-            {!selectedBranchId ? (
-              <p className="text-xs text-gray-9000">
+          <label className="block text-xs font-medium text-slate-300 mb-1">
+            Upload slide (.svs)
+          </label>
+          <input
+            type="file"
+            accept=".svs"
+            onChange={handleUploadWSI}
+            className="text-xs"
+          />
+        </div>
+
+        {/* ------------------------------------------------------ */}
+        {/* JOBS */}
+        {/* ------------------------------------------------------ */}
+        <div className="bg-white/60 border bg-gray-200 rounded-lg p-4 lg:col-span-1 flex flex-col">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">
+            Jobs in Branch{" "}
+            <span className="font-mono text-xs text-sky-300">
+              {selectedBranch ?? "—"}
+            </span>
+          </h3>
+
+          <div className="space-y-2 flex-1 overflow-auto mb-4">
+            {!selectedBranch ? (
+              <p className="text-xs text-gray-500">
                 Select a branch to view jobs.
               </p>
             ) : branchJobs.length === 0 ? (
-              <p className="text-xs text-gray-9000">
-                No jobs yet. Append a job below.
+              <p className="text-xs text-gray-500">
+                No jobs yet. Add one below.
               </p>
             ) : (
               branchJobs.map((job, idx) => (
                 <div
-                  key={`${idx}-${job.template_id}`}
-                  className="flex flex-col md:flex-row md:items-center justify-between gap-2 px-3 py-2 rounded-md bg-white border bg-gray-200 text-xs"
+                  key={idx}
+                  className="flex items-center justify-between px-3 py-2 rounded-md bg-white border text-xs"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-[10px] font-medium text-gray-700">
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <div className="font-mono text-sky-200">
-                        {job.template_id}
-                      </div>
-                      <div className="text-[10px] text-gray-9000 truncate max-w-xs">
-                        payload:{" "}
-                        <span className="font-mono">
-                          {JSON.stringify(job.input_payload)}
-                        </span>
-                      </div>
+                  <div>
+                    <div className="font-mono text-sky-700">
+                      {job.template_id}
                     </div>
+                    {job.input_payload?.slide_id && (
+                      <div className="text-gray-700 text-[10px]">
+                        slide: {job.input_payload.slide_id}
+                      </div>
+                    )}
                   </div>
-
-                  {/* Delete button */}
                   <button
                     onClick={() => handleDeleteJob(idx)}
                     className="text-[10px] px-2 py-1 rounded bg-red-700/80 hover:bg-red-600 text-red-50"
@@ -344,28 +398,27 @@ export function WorkflowDetailPage() {
             )}
           </div>
 
-          {/* Add Job Form */}
+          {/* Add job */}
           <form
             onSubmit={handleAddJob}
-            className="mt-3 pt-3 border-t bg-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3"
+            className="pt-3 border-t grid grid-cols-1 gap-3"
           >
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
                 Job template
               </label>
               <select
-                className="w-full px-3 py-2 rounded-md bg-white border bg-gray-300 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full px-3 py-2 rounded-md bg-white border text-xs text-gray-900"
                 value={jobForm.job_template_id}
-                onChange={(e) => {
-                  const tmpl = e.target.value;
-                  setJobForm((f) => ({
-                    ...f,
-                    job_template_id: tmpl,
-                    payloadJson: TEMPLATE_PAYLOAD_SUGGESTIONS[tmpl] || "{}",
-                  }));
-                }}
+                onChange={(e) =>
+                  setJobForm({
+                    job_template_id: e.target.value,
+                    slide_id: "",
+                  })
+                }
               >
-                {jobTemplates.map((t) => (
+                <option value="">-- choose job --</option>
+                {JOB_TEMPLATES.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
                   </option>
@@ -373,27 +426,48 @@ export function WorkflowDetailPage() {
               </select>
             </div>
 
-            <div className="md:row-span-2">
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                Input payload (JSON)
-              </label>
-              <textarea
-                className="w-full h-28 px-3 py-2 rounded-md bg-white border bg-gray-300 text-xs text-gray-900 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-sky-500"
-                value={jobForm.payloadJson}
-                onChange={(e) =>
-                  setJobForm((f) => ({ ...f, payloadJson: e.target.value }))
-                }
-              />
-            </div>
+            {/* slide picker for jobs that need it */}
+            {jobForm.job_template_id !== "" &&
+              jobForm.job_template_id !== "fake_sleep" && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Select slide
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 rounded-md bg-white border text-xs text-gray-900"
+                    value={jobForm.slide_id}
+                    onChange={(e) =>
+                      setJobForm((f) => ({ ...f, slide_id: e.target.value }))
+                    }
+                  >
+                    <option value="">-- choose slide --</option>
+                    {slides.map((sl) => (
+                      <option key={sl.slide_id} value={sl.slide_id}>
+                        {sl.slide_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-            <div className="flex items-end">
-              <button
-                type="submit"
-                className="w-full px-4 py-2 rounded-md bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white"
-              >
-                Append job to branch
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={
+                jobForm.job_template_id === "" ||
+                (jobForm.job_template_id !== "fake_sleep" &&
+                  jobForm.slide_id === "")
+              }
+              className={`w-full px-4 py-2 rounded-md text-xs font-medium
+    ${
+      jobForm.job_template_id === "" ||
+      (jobForm.job_template_id !== "fake_sleep" && jobForm.slide_id === "")
+        ? "bg-gray-400 cursor-not-allowed text-gray-200"
+        : "bg-sky-600 hover:bg-sky-500 text-white"
+    }
+  `}
+            >
+              Add Job
+            </button>
           </form>
         </div>
       </div>

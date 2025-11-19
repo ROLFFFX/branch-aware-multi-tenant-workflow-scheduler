@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api/client.js";
+import { useParams } from "react-router-dom";
 
 export function JobsPage() {
   const [jobId, setJobId] = useState("");
@@ -8,6 +9,8 @@ export function JobsPage() {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const params = useParams();
+  const urlJobId = params.jobId;
 
   // Load available job templates
   useEffect(() => {
@@ -21,6 +24,16 @@ export function JobsPage() {
     }
     loadTemplates();
   }, []);
+
+  useEffect(() => {
+    if (urlJobId) {
+      setJobId(urlJobId);
+      api
+        .getJob(urlJobId)
+        .then((data) => setJob(data))
+        .catch((err) => setErr(err.message));
+    }
+  }, [urlJobId]);
 
   async function handleFetch(e) {
     e.preventDefault();

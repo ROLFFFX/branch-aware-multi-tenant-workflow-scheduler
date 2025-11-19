@@ -5,7 +5,7 @@ const navItems = [
   { to: "/users", label: "Users" },
   { to: "/workflows", label: "Workflows" },
   { to: "/jobs", label: "Jobs" },
-  { to: "/upload", label: "WSI Upload" },
+  //   { to: "/upload", label: "WSI Upload" },
   { to: "/scheduler", label: "Scheduler" },
 ];
 

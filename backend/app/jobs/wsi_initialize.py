@@ -112,7 +112,7 @@ def generate_smart_tiles(tissue_mask, scale, tile_size, overlap=0, min_size=512,
 # -----------------------------------------------------
 # 3. JOB EXECUTION
 # -----------------------------------------------------
-@register_job("wsi_initialize")
+@register_job("init_wsi")
 async def wsi_initialize(job_id: str, payload: dict):
 
     slide_id = payload["slide_id"]

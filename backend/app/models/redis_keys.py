@@ -105,6 +105,8 @@ def workflow_run_jobs_key(workflow_id: str, run_id: str) -> str:
 
 GLOBAL_PENDING_JOBS = "scheduler:pending_jobs"
 ACTIVE_USERS_KEY = "scheduler:active_users"
+GLOBAL_RUNNING_JOBS = "scheduler:running_jobs"
+GLOBAL_JOB_PROGRESS = "scheduler:job_progress"
 
 def user_queue_key(user_id: str) -> str:
     return f"user:{user_id}:queue"
@@ -116,3 +118,55 @@ Scheduler
 '''
 def scheduler_state_key() -> str:
     return "scheduler:state"
+
+'''
+============
+Slides (WSI uploads)
+============
+'''
+
+def user_slides_key(user_id: str) -> str:
+    """
+    Set of slide_ids uploaded by this user.
+    e.g.:
+        SADD user:<user_id>:slides <slide_id>
+    """
+    return f"user:{user_id}:slides"
+
+
+def slide_key(slide_id: str) -> str:
+    """
+    Hash containing metadata about a slide.
+    e.g.:
+        - slide_id
+        - user_id
+        - slide_path
+        - size_bytes
+    """
+    return f"slide:{slide_id}"
+
+
+def slide_preview_key(slide_id: str) -> str:
+    """
+    Optional: path or bytes for a low-resolution JPEG preview.
+    e.g.:
+        GET slide:<id>:preview
+    """
+    return f"slide:{slide_id}:preview"
+
+'''
+============
+Global monitoring
+============
+'''
+def global_running_jobs_key() -> str:
+    return "global:running_jobs"   # SET of job_ids currently RUNNING
+
+def global_job_progress_key() -> str:
+    return "global:job_progress"   # HASH: job_id -> JSON string
+
+def global_active_users_key() -> str:
+    return "global:active_users"   # SET of user_ids currently allowed to run
+
+def global_worker_usage_key() -> str:
+    return "global:worker_usage"   # HASH: worker_id -> job_id (or empty)

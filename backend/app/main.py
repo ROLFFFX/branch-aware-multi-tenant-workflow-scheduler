@@ -6,7 +6,7 @@ import asyncio
 from app.core.redis_schema import initialize_redis_schema
 from app.services.user_manager import UserManager
 from app.scheduler.scheduler_main import scheduler_loop
-
+from app.workers.worker_main import worker_loop
 
 import app.jobs.fake_sleep
 import app.jobs.wsi_initialize
@@ -17,9 +17,15 @@ async def lifespan(app: FastAPI):
     print("[LIFESPAN] Startup triggered")
     await initialize_redis_schema()
 
-    # Start global scheduler (it will sit idle if state=paused)
-    print("[LIFESPAN] Starting global scheduler loop...")
+    # start scheduler (only ONCE)
+    print("[LIFESPAN] Starting global scheduler...")
     asyncio.create_task(scheduler_loop())
+
+    # start workers for all users in DB
+    users = await UserManager.get_all_users()
+    for uid in users:
+        print(f"[LIFESPAN] Starting worker for {uid}")
+        asyncio.create_task(worker_loop(uid))
 
     yield
 
@@ -32,6 +38,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,6 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routers
 from app.routes.users import router as users_router
 from app.routes.workflows import router as workflows_router
 from app.routes.branches import router as branches_router

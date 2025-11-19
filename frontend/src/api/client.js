@@ -74,20 +74,24 @@ export const api = {
   startScheduler: () => request("/scheduler/start", { method: "POST" }),
   pauseScheduler: () => request("/scheduler/pause", { method: "POST" }),
   getSchedulerState: () => request("/scheduler/state"),
+  getGlobalStatus: () => request("/scheduler/global_status"),
 
-  // Files
-  uploadWSI: async (file) => {
+  // Slides
+  listSlides: (user_id) => request(`/files/user/${user_id}/slides`),
+
+  uploadWSI: async (file, user_id) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/files/upload_wsi`, {
+
+    const res = await fetch(`${API_BASE}/files/upload_wsi?user_id=${user_id}`, {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    try {
-      return await res.json();
-    } catch {
-      return null;
+
+    if (!res.ok) {
+      throw new Error(`Upload failed: ${res.status}`);
     }
+
+    return await res.json();
   },
 };

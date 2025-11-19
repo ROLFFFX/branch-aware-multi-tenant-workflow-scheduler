@@ -17,6 +17,7 @@ export default function App() {
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/workflows/:workflowId" element={<WorkflowDetailPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/jobs/:jobId" element={<JobsPage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/scheduler" element={<SchedulerPage />} />
       </Routes>
