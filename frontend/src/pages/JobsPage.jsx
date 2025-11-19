@@ -163,7 +163,13 @@ export function JobsPage() {
 
   // Run a job template
   async function runTemplate(template) {
+    console.log("triggered");
     const defaultPayload = { seconds: 3 };
+
+    console.log("Payload for creating job:", {
+      job_template_id: template,
+      input_payload: defaultPayload,
+    });
 
     try {
       setCreating(true);

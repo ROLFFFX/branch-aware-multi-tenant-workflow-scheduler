@@ -11,5 +11,6 @@ def register_job(name: str):
     """Decorator to register jobs by name."""
     def decorator(func):
         JOB_REGISTRY[name] = func
+        print(f"[JOB_REGISTRY] Registered job: {name}")  # Debugging line
         return func
     return decorator

@@ -36,4 +36,3 @@ async def get_job(job_id: str):
         data["output_payload"] = {}
 
     return JobInstance(**data)
-
