@@ -8,7 +8,7 @@ import { api } from "../api/client.js";
 // Hard-coded templates (simplified — no JSON)
 const JOB_TEMPLATES = [
   { id: "fake_sleep", label: "Fake Sleep (5s)" },
-  { id: "init_wsi", label: "Initialize WSI" },
+  { id: "wsi_metadata", label: "Initialize WSI" },
   { id: "segment_tiles", label: "Tile Segmentation" },
 ];
 
@@ -121,7 +121,7 @@ export function WorkflowDetailPage() {
     if (!selectedBranch) return;
 
     const needsSlide =
-      jobForm.job_template_id === "init_wsi" ||
+      jobForm.job_template_id === "wsi_metadata" ||
       jobForm.job_template_id === "segment_tiles";
 
     const payload =
