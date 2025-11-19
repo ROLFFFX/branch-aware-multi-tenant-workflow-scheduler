@@ -138,6 +138,14 @@ async def tile_segmentation(job_id: str, payload: dict):
     """
     Async wrapper that offloads the entire heavy lifting to a thread.
     """
+    # FIX: IMMEDIATELY set status to Running. 
+    # Otherwise, the UI waits for the thread to finish 'compute_tissue_mask' (which can take seconds)
+    # before the callback inside the loop finally updates the status.
+    await redis_client.hset(f"job:{job_id}", mapping={
+        "status": "running",
+        "progress": 0
+    })
+    
     slide_id = payload["slide_id"]
     slide_path = payload["slide_path"] # Keep as string for thread safety
     
