@@ -4,6 +4,7 @@ import asyncio
 import functools
 from typing import List, Dict, Any
 
+# Import redis_client globally so it's accessible to the thread function
 from app.core.redis_client import redis_client
 from app.services.job_manager import JobManager
 from app.services.branch_manager import BranchManager
@@ -36,10 +37,11 @@ BATCH_SIZE = 10
 # -------------------------------------------
 # Sync Worker Function (Runs in Thread)
 # -------------------------------------------
-def run_segmentation_task(job_id, slide_path_str, tile_size, overlap, min_tile_size, max_tile_size, progress_callback=None):
+def run_segmentation_task(job_id, slide_path_str, tile_size, overlap, min_tile_size, max_tile_size, loop):
     """
     The synchronous core logic for segmentation. 
     This runs entirely in a separate thread to prevent blocking the asyncio event loop.
+    We pass 'loop' explicitly to schedule updates back to the main thread.
     """
     try:
         # 1. Open Slide (Safe in thread)
@@ -71,10 +73,12 @@ def run_segmentation_task(job_id, slide_path_str, tile_size, overlap, min_tile_s
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        for i in range(0, len(tiles), BATCH_SIZE):
+        total_tiles = len(tiles)
+
+        for i in range(0, total_tiles, BATCH_SIZE):
             # Log occasional progress
             if i % BATCH_SIZE == 0: 
-                print(f"[Thread] Processing {i}/{len(tiles)}")
+                print(f"[Thread] Processing {i}/{total_tiles}")
             
             batch = tiles[i:i+BATCH_SIZE]
             
@@ -97,14 +101,23 @@ def run_segmentation_task(job_id, slide_path_str, tile_size, overlap, min_tile_s
 
                 final_mask[y:y_end, x:x_end] = labeled_output[:h_clip, :w_clip]
             
-            # --- UPDATE PROGRESS ---
-            # Call the callback to update Redis from the main loop
-            if progress_callback:
-                current_processed = min(i + BATCH_SIZE, len(tiles))
-                progress_callback(current_processed, len(tiles))
+            # --- UPDATE PROGRESS SAFELY ---
+            # Schedule the Redis update on the main event loop.
+            # We use the global 'redis_client' variable.
+            if total_tiles > 0:
+                current_processed = min(i + BATCH_SIZE, total_tiles)
+                percent = int((current_processed / total_tiles) * 100)
+                
+                asyncio.run_coroutine_threadsafe(
+                    redis_client.hset(f"job:{job_id}", mapping={
+                        "progress": percent,
+                        "status": "running"
+                    }),
+                    loop
+                )
 
         # 6. Save Outputs
-        # FIX: Save to 'tmp' directory to match the file server's resolution path
+        # Save to 'tmp' directory to match the file server's resolution path
         output_dir = Path("tmp") 
         output_dir.mkdir(exist_ok=True, parents=True)
 
@@ -138,14 +151,19 @@ async def tile_segmentation(job_id: str, payload: dict):
     """
     Async wrapper that offloads the entire heavy lifting to a thread.
     """
-    # FIX: IMMEDIATELY set status to Running. 
-    # Otherwise, the UI waits for the thread to finish 'compute_tissue_mask' (which can take seconds)
-    # before the callback inside the loop finally updates the status.
-    await redis_client.hset(f"job:{job_id}", mapping={
-        "status": "running",
-        "progress": 0
-    })
+    print(f"DEBUG: Starting tile_segmentation for Job {job_id}")
     
+    # FIX 1: IMMEDIATELY set status to Running.
+    # This ensures the UI updates instantly, covering the time taken by 'compute_tissue_mask'.
+    try:
+        await redis_client.hset(f"job:{job_id}", mapping={
+            "status": "running",
+            "progress": 0
+        })
+        print(f"DEBUG: Set Job {job_id} status to RUNNING")
+    except Exception as e:
+        print(f"ERROR: Failed to set initial Redis status for job {job_id}: {e}")
+
     slide_id = payload["slide_id"]
     slide_path = payload["slide_path"] # Keep as string for thread safety
     
@@ -157,24 +175,12 @@ async def tile_segmentation(job_id: str, payload: dict):
 
     loop = asyncio.get_running_loop()
 
-    # Define a callback that runs in the main thread to update Redis
-    def update_redis_progress(current, total):
-        if total == 0: return
-        percent = int((current / total) * 100)
-        # Use run_coroutine_threadsafe to schedule the async Redis call from the sync thread
-        asyncio.run_coroutine_threadsafe(
-            redis_client.hset(f"job:{job_id}", mapping={
-                "progress": percent,
-                "status": "running" # Re-affirm running status
-            }),
-            loop
-        )
-
-    # Run the ENTIRE task in a separate thread, passing the callback
+    # FIX 2: Pass 'loop' directly instead of a closure callback.
+    # This prevents pickling errors if the executor environment is strict.
     result = await loop.run_in_executor(
         None, 
         run_segmentation_task,
-        job_id, slide_path, tile_size, overlap, min_tile_size, max_tile_size, update_redis_progress
+        job_id, slide_path, tile_size, overlap, min_tile_size, max_tile_size, loop
     )
 
     print("\nJob Completed Successfully.")
@@ -186,7 +192,7 @@ async def tile_segmentation(job_id: str, payload: dict):
 
     return {
         "slide_id": slide_id,
-        # FIX: Return only the filename (relative path) so the download endpoint (rooted in tmp) finds it
+        # Return relative filename so the download endpoint (rooted in tmp) finds it
         "mask_path": result["mask_filename"],     
         "overlay_path": result["overlay_filename"], 
         "num_tiles": result["num_tiles"],
