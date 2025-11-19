@@ -79,4 +79,8 @@ class UserManager:
     async def get_user_status(user_id: str):
         return await redis_client.hgetall(user_key(user_id))
     
+    @staticmethod
+    async def get_all_users():
+        return await redis_client.smembers(users_key())
+    
     

@@ -27,3 +27,8 @@ async def delete_user(user_id: str):
         raise HTTPException(status_code=404, detail="User not found.")
 
     return {"message": "User deleted successfully.", "user_id": user_id}
+
+@router.get("/", summary="Get all userIDs")
+async def list_users():
+    users = await UserManager.get_all_users()
+    return {"count": len(users), "users": list(users)}
