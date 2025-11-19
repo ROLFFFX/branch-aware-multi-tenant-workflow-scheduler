@@ -48,7 +48,6 @@ from app.routes.execution import router as execution_router
 from app.routes.scheduler import router as scheduler_router
 from app.routes.files import router as files_router
 
-
 app.include_router(users_router)
 app.include_router(workflows_router)
 app.include_router(branches_router)

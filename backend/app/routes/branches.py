@@ -115,7 +115,7 @@ async def get_branch_jobs(workflow_id: str, branch_id: str):
     )
 
 
-# delete job from workflow = delete branch
+# delete branch
 @router.delete(
     "/{workflow_id}/branches/{branch_id}",
     summary="Delete a branch from a workflow",
@@ -133,3 +133,31 @@ async def delete_branch(workflow_id: str, branch_id: str):
         "workflow_id": workflow_id,
         "branch_id": branch_id,
     }
+
+@router.delete("/{workflow_id}/branches/{branch_id}/jobs/{index}",
+               summary="Delete a job from a branch")
+async def delete_branch_job(workflow_id: str, branch_id: str, index: int):
+
+    # Workflow exists?
+    if not await WorkflowManager.workflow_exists(workflow_id):
+        raise HTTPException(404, "Workflow not found.")
+
+    # Branch exists?
+    if not await BranchManager.branch_exists(workflow_id, branch_id):
+        raise HTTPException(404, "Branch not found.")
+
+    # Delete job
+    deleted = await BranchManager.delete_job_from_branch(
+        workflow_id, branch_id, index
+    )
+
+    if not deleted:
+        raise HTTPException(404, "Job index out of range.")
+
+    return {
+        "message": "Job deleted.",
+        "workflow_id": workflow_id,
+        "branch_id": branch_id,
+        "deleted_index": index,
+    }
+

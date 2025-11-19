@@ -2,8 +2,14 @@ import json
 from fastapi import APIRouter, HTTPException
 from app.services.job_manager import JobManager
 from app.schemas.jobs import JobInstance
+from app.workers.registry import JOB_REGISTRY
+
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
+@router.get("/job-templates")
+async def list_job_templates():
+    return list(JOB_REGISTRY.keys())
 
 
 @router.get("/{job_id}", response_model=JobInstance)
@@ -30,3 +36,4 @@ async def get_job(job_id: str):
         data["output_payload"] = {}
 
     return JobInstance(**data)
+

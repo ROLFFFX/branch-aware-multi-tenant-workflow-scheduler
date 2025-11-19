@@ -20,7 +20,7 @@ class WorkflowResponse(BaseModel):
     entry_branch: Optional[str] = None
     
 @router.post("/", response_model=WorkflowResponse,
-             summary="Create a new workflow (dummy branch node 0)")
+             summary="Create a new workflow (dummy branch node)")
 async def create_workflow(payload: WorkflowCreateRequest):
 
     if not await UserManager.is_registered(payload.owner_user_id):

@@ -100,6 +100,20 @@ class BranchManager:
         return list(branches)
 
     @staticmethod
+    async def delete_executed_jobs(workflow_id: str, branch_id: str):
+        """Delete executed job instances belonging to workflow+branch."""
+        keys = await redis_client.keys("job:*")
+        for k in keys:
+            job_data = await redis_client.hgetall(k)
+            if not job_data:
+                continue
+            if (
+                job_data.get("workflow_id") == workflow_id
+                and job_data.get("branch_id") == branch_id
+            ):
+                await redis_client.delete(k)
+                
+    @staticmethod
     async def delete_branch(workflow_id: str, branch_id: str) -> bool:
         """
         Delete branch from a workflow
@@ -113,4 +127,24 @@ class BranchManager:
             return False
 
         await redis_client.delete(workflow_branch_key(workflow_id, branch_id))
+        await BranchManager.delete_executed_jobs(workflow_id, branch_id)
         return True
+
+    @staticmethod
+    async def branch_exists(workflow_id: str, branch_id: str) -> bool:
+        branches = await redis_client.smembers(workflow_branches_key(workflow_id))
+        return branch_id in branches
+    
+    @staticmethod
+    async def delete_job_from_branch(workflow_id: str, branch_id: str, index: int) -> bool:
+        key = workflow_branch_key(workflow_id, branch_id)
+
+        raw_jobs = await redis_client.lrange(key, 0, -1)
+        if index < 0 or index >= len(raw_jobs):
+            return False
+
+        job_to_remove = raw_jobs[index]
+        await redis_client.lrem(key, 1, job_to_remove)
+        return True
+    
+    

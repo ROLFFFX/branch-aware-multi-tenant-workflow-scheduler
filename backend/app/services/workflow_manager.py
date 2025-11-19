@@ -5,6 +5,8 @@
 '''
 
 from typing import Optional, Dict, Any, List
+from app.services.branch_manager import BranchManager
+
 
 from app.core.redis_client import redis_client
 from app.models.redis_keys import (
@@ -17,43 +19,34 @@ from app.models.redis_keys import (
 
 class WorkflowManager:
     @staticmethod
-    async def create_workflow(
-        workflow_id: str,
-        name: str,
-        owner_user_id: str,
-    ) -> bool:
+    async def create_workflow(workflow_id: str, name: str, owner_user_id: str):
         """
-        Create a new workflow definition.
-        Automatically creates a default branch '0'.
-        Returns False if workflow_id already exists.
+        Create workflow metadata AND auto-create default branch 'default'.
         """
-        exists = await redis_client.sismember(workflows_key(), workflow_id)
+        # Check if workflow already exists
+        exists = await redis_client.exists(f"workflow:{workflow_id}")
         if exists:
             return False
 
-        # Register workflow ID
+        DEFAULT_BRANCH = "default"
+
+        # Write workflow metadata
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": name,
+            "owner_user_id": owner_user_id,
+            "entry_branch": DEFAULT_BRANCH,
+        }
+
+        await redis_client.hset(f"workflow:{workflow_id}", mapping=workflow_data)
         await redis_client.sadd(workflows_key(), workflow_id)
 
-        # Default entry branch
-        entry_branch = "0"
 
-        # Store workflow metadata
-        await redis_client.hset(
-            workflow_key(workflow_id),
-            mapping={
-                "name": name,
-                "owner_user_id": owner_user_id,
-                "entry_branch": entry_branch,
-            }
-        )
-
-        # Create default branch
-        await redis_client.sadd(workflow_branches_key(workflow_id), entry_branch)
-
-        # Create the empty job list for branch "0"
-        await redis_client.delete(workflow_branch_key(workflow_id, entry_branch))
+        # Create the default branch
+        await BranchManager.create_branch(workflow_id, DEFAULT_BRANCH)
 
         return True
+
 
     @staticmethod
     async def workflow_exists(workflow_id: str) -> bool:
