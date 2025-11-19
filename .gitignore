@@ -39,10 +39,6 @@ dist/
 .vite/
 vite.config.ts.timestamp*
 
-# Optional:
-# If using TypeScript
-*.tsbuildinfo
-
 # -----------------------
 # Logs
 # -----------------------
