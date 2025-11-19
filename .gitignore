@@ -79,3 +79,6 @@ dump.rdb
 *.cache/
 .cache/
 coverage/
+
+
+poc/data
